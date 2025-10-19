@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv
+
+# Environment variables (будут переданы через docker-compose)
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation (не нужно в контейнере)
+*.md
+LICENSE
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Database files (не нужно в контейнере)
+*.db
+*.sqlite3
+
+# Temporary files
+temp/
+tmp/
+downloads/
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore

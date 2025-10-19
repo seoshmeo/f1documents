@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  # PostgreSQL база данных
+  postgres:
+    image: postgres:15-alpine
+    container_name: fia_postgres
+    environment:
+      POSTGRES_DB: fia_documents
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./setup_database.sql:/docker-entrypoint-initdb.d/setup.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - fia_network
+
+  # FIA Documents Scraper
+  scraper:
+    build: .
+    container_name: fia_scraper
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Database
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: fia_documents
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+
+      # Telegram (замените на ваши данные)
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-8277919288:AAGC17pTImhRuUpGajaG3eW8BYyPoC_kzcA}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:--1002701939006}
+
+      # Scraper settings
+      FIA_URL: https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2025-2071
+      CHECK_INTERVAL: ${CHECK_INTERVAL:-3600}
+
+    # Режим работы - можно изменить на once для однократного запуска
+    command: python main.py continuous
+
+    volumes:
+      - ./logs:/app/logs
+
+    restart: unless-stopped
+    networks:
+      - fia_network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  fia_network:
+    driver: bridge
