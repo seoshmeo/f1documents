@@ -45,6 +45,43 @@ class FIADocumentService:
         self.check_interval = int(os.getenv('CHECK_INTERVAL', 3600))  # Default: 1 hour
         self.telegram = TelegramNotifier()  # Initialize Telegram notifier
 
+    def get_check_interval(self):
+        """Get current check interval from database or environment"""
+        try:
+            interval_str = self.db.get_setting('check_interval', str(self.check_interval))
+            return int(interval_str)
+        except Exception as e:
+            logger.warning(f"Could not get interval from DB, using default: {e}")
+            return self.check_interval
+
+    def is_scraper_enabled(self):
+        """Check if scraper is enabled"""
+        try:
+            enabled = self.db.get_setting('scraper_enabled', 'true')
+            return enabled.lower() == 'true'
+        except Exception as e:
+            logger.warning(f"Could not get enabled status, assuming true: {e}")
+            return True
+
+    def check_force_flag(self):
+        """Check and reset force check flag"""
+        try:
+            force = self.db.get_setting('force_check', 'false')
+            if force == 'true':
+                self.db.set_setting('force_check', 'false', 'system')
+                return True
+            return False
+        except Exception as e:
+            logger.warning(f"Could not check force flag: {e}")
+            return False
+
+    def update_last_check_time(self):
+        """Update last check timestamp"""
+        try:
+            self.db.set_setting('last_check_time', str(int(time.time())), 'system')
+        except Exception as e:
+            logger.warning(f"Could not update last check time: {e}")
+
     def initialize(self):
         """Initialize the service"""
         logger.info("Initializing FIA Document Service...")
@@ -52,6 +89,7 @@ class FIADocumentService:
         # Create database tables if they don't exist
         try:
             self.db.create_tables()
+            self.db.create_settings_table()
             logger.info("Database initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}")
@@ -140,21 +178,41 @@ class FIADocumentService:
             self.db.close_all_connections()
 
     def run_continuous(self):
-        """Run the service continuously with specified interval"""
+        """Run the service continuously with dynamic interval from database"""
         try:
             self.initialize()
 
-            logger.info(f"Starting continuous monitoring (interval: {self.check_interval} seconds)")
+            initial_interval = self.get_check_interval()
+            logger.info(f"Starting continuous monitoring (initial interval: {initial_interval} seconds)")
 
             while True:
                 try:
-                    new_docs = self.process_documents()
+                    # Get current interval from database (allows dynamic updates)
+                    current_interval = self.get_check_interval()
 
-                    if new_docs > 0:
-                        logger.info(f"Added {new_docs} new document(s)")
+                    # Check if scraping is enabled
+                    if not self.is_scraper_enabled():
+                        logger.info("Scraping is disabled, skipping check...")
+                    else:
+                        # Process documents
+                        new_docs = self.process_documents()
+                        self.update_last_check_time()
 
-                    logger.info(f"Waiting {self.check_interval} seconds until next check...")
-                    time.sleep(self.check_interval)
+                        if new_docs > 0:
+                            logger.info(f"Added {new_docs} new document(s)")
+
+                    logger.info(f"Waiting {current_interval} seconds until next check...")
+
+                    # Sleep in smaller intervals to check for force flag
+                    sleep_time = 0
+                    while sleep_time < current_interval:
+                        time.sleep(10)  # Check every 10 seconds
+                        sleep_time += 10
+
+                        # Check for force check flag
+                        if self.check_force_flag():
+                            logger.info("Force check triggered!")
+                            break
 
                 except KeyboardInterrupt:
                     logger.info("Received interrupt signal. Shutting down...")
@@ -210,6 +268,45 @@ class FIADocumentService:
             raise
 
 
+    def run_with_bot(self):
+        """Run service with Telegram bot command handling"""
+        try:
+            import asyncio
+            from telegram.ext import Application
+            from bot_commands import setup_bot_handlers
+
+            self.initialize()
+
+            # Get bot token and chat ID
+            bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
+            chat_id = os.getenv('TELEGRAM_CHAT_ID')
+
+            if not bot_token or not chat_id:
+                logger.error("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set for bot mode")
+                raise ValueError("Missing Telegram credentials")
+
+            logger.info("Starting bot mode with command handling...")
+
+            # Create bot application
+            application = Application.builder().token(bot_token).build()
+
+            # Setup command handlers
+            asyncio.run(setup_bot_handlers(application, self.db, chat_id))
+
+            # Start bot in background
+            logger.info("Starting Telegram bot...")
+            application.run_polling(drop_pending_updates=True, allowed_updates=['message'])
+
+            # This won't be reached while bot is running
+            # The continuous monitoring happens in parallel through force_check flags
+
+        except Exception as e:
+            logger.error(f"Error in bot mode: {e}")
+            raise
+        finally:
+            self.db.close_all_connections()
+
+
 def main():
     """Main entry point"""
     import argparse
@@ -217,8 +314,10 @@ def main():
     parser = argparse.ArgumentParser(description='FIA Documents Scraper Service')
     parser.add_argument(
         'mode',
-        choices=['once', 'continuous', 'list', 'test-telegram'],
-        help='Run mode: once (single run), continuous (periodic checks), list (show all documents), test-telegram (test Telegram connection)'
+        choices=['once', 'continuous', 'list', 'test-telegram', 'bot'],
+        help='Run mode: once (single run), continuous (periodic checks with dynamic interval), '
+             'list (show all documents), test-telegram (test Telegram connection), '
+             'bot (run with Telegram bot command handling)'
     )
 
     args = parser.parse_args()
@@ -234,6 +333,8 @@ def main():
             service.list_documents()
         elif args.mode == 'test-telegram':
             service.test_telegram()
+        elif args.mode == 'bot':
+            service.run_with_bot()
     except KeyboardInterrupt:
         logger.info("Service interrupted by user")
         sys.exit(0)

@@ -215,3 +215,128 @@ class Database:
         if self.connection_pool:
             self.connection_pool.closeall()
             logger.info("All database connections closed")
+
+    def create_settings_table(self):
+        """Create bot_settings table if not exists"""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor()
+
+            # Create settings table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS bot_settings (
+                    id SERIAL PRIMARY KEY,
+                    setting_key VARCHAR(100) NOT NULL UNIQUE,
+                    setting_value TEXT NOT NULL,
+                    description TEXT,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_by VARCHAR(100)
+                );
+            """)
+
+            # Create index
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_setting_key
+                ON bot_settings(setting_key);
+            """)
+
+            # Insert default settings
+            cursor.execute("""
+                INSERT INTO bot_settings (setting_key, setting_value, description, updated_by)
+                VALUES
+                    ('check_interval', '3600', 'Interval between checks in seconds', 'system'),
+                    ('scraper_enabled', 'true', 'Enable/disable automatic scraping', 'system'),
+                    ('last_check_time', '0', 'Unix timestamp of last check', 'system')
+                ON CONFLICT (setting_key) DO NOTHING;
+            """)
+
+            connection.commit()
+            logger.info("Bot settings table created successfully")
+
+        except Exception as e:
+            logger.error(f"Error creating settings table: {e}")
+            if connection:
+                connection.rollback()
+            raise
+        finally:
+            if connection:
+                cursor.close()
+                self.return_connection(connection)
+
+    def get_setting(self, key, default=None):
+        """Get setting value by key"""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor()
+
+            cursor.execute(
+                "SELECT setting_value FROM bot_settings WHERE setting_key = %s",
+                (key,)
+            )
+
+            result = cursor.fetchone()
+            return result[0] if result else default
+
+        except Exception as e:
+            logger.error(f"Error getting setting {key}: {e}")
+            return default
+        finally:
+            if connection:
+                cursor.close()
+                self.return_connection(connection)
+
+    def set_setting(self, key, value, updated_by='bot'):
+        """Update setting value"""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor()
+
+            cursor.execute("""
+                INSERT INTO bot_settings (setting_key, setting_value, updated_by)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (setting_key)
+                DO UPDATE SET
+                    setting_value = EXCLUDED.setting_value,
+                    updated_by = EXCLUDED.updated_by,
+                    updated_at = CURRENT_TIMESTAMP
+            """, (key, value, updated_by))
+
+            connection.commit()
+            logger.info(f"Setting updated: {key} = {value}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error setting {key}: {e}")
+            if connection:
+                connection.rollback()
+            return False
+        finally:
+            if connection:
+                cursor.close()
+                self.return_connection(connection)
+
+    def get_all_settings(self):
+        """Get all settings"""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor(cursor_factory=RealDictCursor)
+
+            cursor.execute("""
+                SELECT setting_key, setting_value, description, updated_at, updated_by
+                FROM bot_settings
+                ORDER BY setting_key
+            """)
+
+            return cursor.fetchall()
+
+        except Exception as e:
+            logger.error(f"Error getting all settings: {e}")
+            return []
+        finally:
+            if connection:
+                cursor.close()
+                self.return_connection(connection)

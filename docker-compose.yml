@@ -46,8 +46,10 @@ services:
       FIA_URL: https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2025-2071
       CHECK_INTERVAL: ${CHECK_INTERVAL:-3600}
 
-    # Режим работы - можно изменить на once для однократного запуска
-    command: python main.py continuous
+    # Режим работы:
+    # - python main.py continuous (только скрапинг с динамическим интервалом)
+    # - python run_with_bot.py (скрапинг + управление через Telegram бота)
+    command: python run_with_bot.py
 
     volumes:
       - ./logs:/app/logs
