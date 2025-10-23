@@ -83,9 +83,10 @@ def run_bot():
     logger.info("Starting Telegram bot...")
 
     bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
-    chat_id = os.getenv('TELEGRAM_CHAT_ID')
+    # Admin chat for commands (personal chat)
+    admin_chat_id = os.getenv('TELEGRAM_ADMIN_CHAT_ID', os.getenv('TELEGRAM_CHAT_ID'))
 
-    if not bot_token or not chat_id:
+    if not bot_token or not admin_chat_id:
         logger.error("Missing Telegram credentials!")
         return
 
@@ -94,10 +95,10 @@ def run_bot():
     # Create application
     application = Application.builder().token(bot_token).build()
 
-    # Setup handlers synchronously
+    # Setup handlers synchronously with admin chat ID
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    loop.run_until_complete(setup_bot_handlers(application, db, chat_id))
+    loop.run_until_complete(setup_bot_handlers(application, db, admin_chat_id))
 
     logger.info("Bot handlers registered, starting polling...")
 

@@ -41,6 +41,7 @@ services:
       # Telegram (замените на ваши данные)
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-8277919288:AAGC17pTImhRuUpGajaG3eW8BYyPoC_kzcA}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:--1002701939006}
+      TELEGRAM_ADMIN_CHAT_ID: ${TELEGRAM_ADMIN_CHAT_ID:-5775174079}
 
       # Scraper settings
       FIA_URL: https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2025-2071
