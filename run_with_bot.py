@@ -75,7 +75,7 @@ def run_scraper():
         service.db.close_all_connections()
 
 
-async def run_bot():
+def run_bot():
     """Run Telegram bot"""
     from database import Database
     from bot_commands import setup_bot_handlers
@@ -90,12 +90,19 @@ async def run_bot():
         return
 
     db = Database()
+
+    # Create application
     application = Application.builder().token(bot_token).build()
 
-    await setup_bot_handlers(application, db, chat_id)
+    # Setup handlers synchronously
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(setup_bot_handlers(application, db, chat_id))
 
     logger.info("Bot handlers registered, starting polling...")
-    await application.run_polling(drop_pending_updates=True, allowed_updates=['message'])
+
+    # Run polling (this is blocking and manages its own event loop)
+    application.run_polling(drop_pending_updates=True, allowed_updates=['message'])
 
 
 def main():
@@ -111,7 +118,7 @@ def main():
 
     # Run bot in main thread (blocking)
     try:
-        asyncio.run(run_bot())
+        run_bot()
     except KeyboardInterrupt:
         logger.info("Shutting down...")
     except Exception as e:
