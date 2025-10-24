@@ -121,12 +121,10 @@ class TelegramNotifier:
             return False
 
         try:
-            # Try to get existing event loop, create new one if needed
+            # Try to get existing event loop
             try:
                 loop = asyncio.get_running_loop()
-                # If we're in a running loop, create task instead
-                task = loop.create_task(self._send_message_async(message))
-                # Wait for completion using asyncio.run_coroutine_threadsafe
+                # We're inside a running loop, use run_coroutine_threadsafe
                 import concurrent.futures
                 future = asyncio.run_coroutine_threadsafe(self._send_message_async(message), loop)
                 result = future.result(timeout=30)
