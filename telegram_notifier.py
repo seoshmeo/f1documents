@@ -127,7 +127,7 @@ class TelegramNotifier:
                 # We're inside a running loop, use run_coroutine_threadsafe
                 import concurrent.futures
                 future = asyncio.run_coroutine_threadsafe(self._send_message_async(message), loop)
-                result = future.result(timeout=30)
+                result = future.result(timeout=60)  # Increased timeout for pool availability
                 return result
             except RuntimeError:
                 # No running loop, create a new one
