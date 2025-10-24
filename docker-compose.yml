@@ -13,7 +13,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./setup_database.sql:/docker-entrypoint-initdb.d/setup.sql
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5433:5432"  # Доступен только с localhost для безопасности
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -46,6 +46,9 @@ services:
       # Scraper settings
       FIA_URL: https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2025-2071
       CHECK_INTERVAL: ${CHECK_INTERVAL:-3600}
+
+      # Anthropic API for AI summaries
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
 
     # Режим работы:
     # - python main.py continuous (только скрапинг с динамическим интервалом)
