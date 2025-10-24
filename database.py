@@ -59,6 +59,7 @@ class Database:
                     file_size BIGINT,
                     document_type VARCHAR(50),
                     season VARCHAR(20),
+                    summary TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
@@ -154,8 +155,8 @@ class Database:
 
             cursor.execute("""
                 INSERT INTO fia_documents
-                (document_name, document_url, document_hash, file_size, document_type, season)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                (document_name, document_url, document_hash, file_size, document_type, season, summary)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
             """, (
                 document_data['name'],
@@ -163,7 +164,8 @@ class Database:
                 document_data['hash'],
                 document_data.get('size'),
                 document_data.get('type', 'PDF'),
-                document_data.get('season', '2025')
+                document_data.get('season', '2025'),
+                document_data.get('summary')
             ))
 
             document_id = cursor.fetchone()[0]

@@ -43,7 +43,7 @@ class TelegramNotifier:
         Format a document into a nice Telegram message
 
         Args:
-            document: Document dictionary with name, url, size, etc.
+            document: Document dictionary with name, url, size, summary, etc.
 
         Returns:
             Formatted message string
@@ -70,6 +70,10 @@ class TelegramNotifier:
 
         if document.get('season'):
             message_parts.append(f"🏁 Сезон: {document['season']}\n")
+
+        # Add summary if available
+        if document.get('summary'):
+            message_parts.append(f"\n📝 <b>Краткое содержание:</b>\n{document['summary']}\n")
 
         message_parts.append(f"\n🔗 <a href=\"{document['url']}\">Открыть документ</a>")
 

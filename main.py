@@ -15,6 +15,8 @@ from dotenv import load_dotenv
 from database import Database
 from scraper import FIAScraper
 from telegram_notifier import TelegramNotifier
+from pdf_processor import PDFProcessor
+from claude_summarizer import ClaudeSummarizer
 
 # Load environment variables
 load_dotenv()
@@ -44,6 +46,8 @@ class FIADocumentService:
         self.scraper = FIAScraper(self.fia_url)
         self.check_interval = int(os.getenv('CHECK_INTERVAL', 3600))  # Default: 1 hour
         self.telegram = TelegramNotifier()  # Initialize Telegram notifier
+        self.pdf_processor = PDFProcessor()  # Initialize PDF processor
+        self.summarizer = ClaudeSummarizer()  # Initialize Claude summarizer
 
     def get_check_interval(self):
         """Get current check interval from database or environment"""
@@ -126,7 +130,41 @@ class FIADocumentService:
                         logger.info(f"Document with same content exists (skipping): {doc['name']}")
                         continue
 
-                    # Insert new document
+                    # Try to generate summary if Claude Code is available
+                    summary = None
+                    pdf_path = None
+                    try:
+                        if self.summarizer.is_available():
+                            logger.info(f"Attempting to generate summary for: {doc['name']}")
+
+                            # Download and extract text from PDF
+                            result = self.pdf_processor.process_pdf(doc['url'])
+                            pdf_path = result.get('pdf_path')
+                            pdf_text = result.get('text')
+
+                            if pdf_text:
+                                logger.info(f"PDF text extracted ({len(pdf_text)} chars)")
+
+                                # Generate summary
+                                summary = self.summarizer.generate_summary(pdf_text, doc['name'])
+
+                                if summary:
+                                    logger.info(f"✓ Summary generated successfully")
+                                    doc['summary'] = summary
+                                else:
+                                    logger.info("No summary generated (quota/error)")
+                            else:
+                                logger.warning("Could not extract text from PDF")
+                        else:
+                            logger.info("Claude Code not available, skipping summary")
+                    except Exception as e:
+                        logger.warning(f"Error generating summary: {e}")
+                    finally:
+                        # Clean up temp PDF file
+                        if pdf_path:
+                            self.pdf_processor.cleanup_temp_file(pdf_path)
+
+                    # Insert new document (with summary if available)
                     document_id = self.db.insert_document(doc)
 
                     if document_id:
@@ -134,6 +172,8 @@ class FIADocumentService:
                         logger.info(f"NEW DOCUMENT ADDED: {doc['name']} (ID: {document_id})")
                         logger.info(f"  URL: {doc['url']}")
                         logger.info(f"  Size: {doc['size']} bytes" if doc['size'] else "  Size: Unknown")
+                        if summary:
+                            logger.info(f"  Summary: ✓ Generated")
 
                         # Send Telegram notification
                         try:
