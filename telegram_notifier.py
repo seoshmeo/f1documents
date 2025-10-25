@@ -136,8 +136,11 @@ class TelegramNotifier:
                     import concurrent.futures
                     future = asyncio.run_coroutine_threadsafe(self._send_message_async(message), loop)
                     result = future.result(timeout=90)  # Increased timeout for pool availability
-                    logger.info(f"Message sent successfully on attempt {attempt + 1}")
-                    return result
+                    if result:
+                        logger.info(f"Message sent successfully on attempt {attempt + 1}")
+                        return True
+                    else:
+                        raise Exception("Failed to send message (async returned False)")
                 except RuntimeError as re:
                     # No running loop, create a new one
                     logger.debug(f"No running event loop detected: {re}, creating new one")
@@ -145,8 +148,11 @@ class TelegramNotifier:
                     asyncio.set_event_loop(loop)
                     try:
                         result = loop.run_until_complete(self._send_message_async(message))
-                        logger.info(f"Message sent successfully on attempt {attempt + 1}")
-                        return result
+                        if result:
+                            logger.info(f"Message sent successfully on attempt {attempt + 1}")
+                            return True
+                        else:
+                            raise Exception("Failed to send message (async returned False)")
                     finally:
                         loop.close()
 
