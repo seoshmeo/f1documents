@@ -179,8 +179,8 @@ class FIADocumentService:
                         try:
                             if self.telegram.notify_new_document(doc):
                                 logger.info(f"Telegram notification sent for: {doc['name']}")
-                                # Small delay to prevent connection pool exhaustion
-                                time.sleep(1)
+                                # Delay to prevent connection pool exhaustion
+                                time.sleep(2)
                             else:
                                 logger.warning(f"Failed to send Telegram notification for: {doc['name']}")
                         except Exception as e:

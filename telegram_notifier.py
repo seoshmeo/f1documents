@@ -120,28 +120,40 @@ class TelegramNotifier:
             logger.debug("Telegram notifications disabled, skipping message")
             return False
 
-        try:
-            # Try to get existing event loop
-            try:
-                loop = asyncio.get_running_loop()
-                # We're inside a running loop, use run_coroutine_threadsafe
-                import concurrent.futures
-                future = asyncio.run_coroutine_threadsafe(self._send_message_async(message), loop)
-                result = future.result(timeout=60)  # Increased timeout for pool availability
-                return result
-            except RuntimeError:
-                # No running loop, create a new one
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    result = loop.run_until_complete(self._send_message_async(message))
-                    return result
-                finally:
-                    loop.close()
+        import time
+        max_retries = 3
+        retry_delay = 2  # Start with 2 seconds
 
-        except Exception as e:
-            logger.error(f"Error in send_message: {e}")
-            return False
+        for attempt in range(max_retries):
+            try:
+                # Try to get existing event loop
+                try:
+                    loop = asyncio.get_running_loop()
+                    # We're inside a running loop, use run_coroutine_threadsafe
+                    import concurrent.futures
+                    future = asyncio.run_coroutine_threadsafe(self._send_message_async(message), loop)
+                    result = future.result(timeout=90)  # Increased timeout for pool availability
+                    return result
+                except RuntimeError:
+                    # No running loop, create a new one
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        result = loop.run_until_complete(self._send_message_async(message))
+                        return result
+                    finally:
+                        loop.close()
+
+            except Exception as e:
+                if "Pool timeout" in str(e) and attempt < max_retries - 1:
+                    logger.warning(f"Pool timeout, retrying in {retry_delay} seconds (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    logger.error(f"Error in send_message: {e}")
+                    return False
+
+        return False
 
     def notify_new_document(self, document: Dict) -> bool:
         """
