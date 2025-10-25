@@ -126,33 +126,49 @@ class TelegramNotifier:
 
         for attempt in range(max_retries):
             try:
+                logger.info(f"Attempting to send message (attempt {attempt + 1}/{max_retries})")
+
                 # Try to get existing event loop
                 try:
                     loop = asyncio.get_running_loop()
+                    logger.debug("Found running event loop, using run_coroutine_threadsafe")
                     # We're inside a running loop, use run_coroutine_threadsafe
                     import concurrent.futures
                     future = asyncio.run_coroutine_threadsafe(self._send_message_async(message), loop)
                     result = future.result(timeout=90)  # Increased timeout for pool availability
+                    logger.info(f"Message sent successfully on attempt {attempt + 1}")
                     return result
-                except RuntimeError:
+                except RuntimeError as re:
                     # No running loop, create a new one
+                    logger.debug(f"No running event loop detected: {re}, creating new one")
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
                     try:
                         result = loop.run_until_complete(self._send_message_async(message))
+                        logger.info(f"Message sent successfully on attempt {attempt + 1}")
                         return result
                     finally:
                         loop.close()
 
             except Exception as e:
-                if "Pool timeout" in str(e) and attempt < max_retries - 1:
-                    logger.warning(f"Pool timeout, retrying in {retry_delay} seconds (attempt {attempt + 1}/{max_retries})")
+                error_str = str(e)
+                # Check if this is a retryable error
+                is_retryable = any(keyword in error_str.lower() for keyword in [
+                    'pool timeout', 'event loop is closed', 'connection', 'timeout'
+                ])
+
+                if is_retryable and attempt < max_retries - 1:
+                    logger.warning(f"Retryable error ({error_str}), retrying in {retry_delay} seconds (attempt {attempt + 1}/{max_retries})")
                     time.sleep(retry_delay)
                     retry_delay *= 2  # Exponential backoff
+                    continue  # Try again
                 else:
-                    logger.error(f"Error in send_message: {e}")
+                    logger.error(f"Error in send_message (attempt {attempt + 1}/{max_retries}): {e}")
+                    if attempt < max_retries - 1:
+                        logger.error("Non-retryable error, aborting")
                     return False
 
+        logger.error(f"Failed to send message after {max_retries} attempts")
         return False
 
     def notify_new_document(self, document: Dict) -> bool:
