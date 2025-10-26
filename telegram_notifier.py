@@ -30,12 +30,24 @@ class TelegramNotifier:
         self.bot_token = bot_token or os.getenv('TELEGRAM_BOT_TOKEN')
         self.chat_id = chat_id or os.getenv('TELEGRAM_CHAT_ID')
         self.enabled = bool(self.bot_token and self.chat_id)
+        self.event_loop = None  # Persistent event loop
 
         if not self.enabled:
             logger.warning("Telegram notifications disabled: missing bot token or chat ID")
         else:
-            self.bot = Bot(token=self.bot_token)
-            logger.info(f"Telegram notifier initialized for chat ID: {self.chat_id}")
+            # Create a dedicated httpx client with its own connection pool
+            # This prevents pool conflicts with the bot command handler
+            from telegram.request import HTTPXRequest
+
+            request = HTTPXRequest(
+                connection_pool_size=8,  # Increased pool size for notifications
+                connect_timeout=30.0,
+                read_timeout=30.0,
+                write_timeout=30.0,
+                pool_timeout=10.0  # Increased from default 1.0 second
+            )
+            self.bot = Bot(token=self.bot_token, request=request)
+            logger.info(f"Telegram notifier initialized with dedicated connection pool (size=8) for chat ID: {self.chat_id}")
 
     def format_document_message(self, document: Dict) -> str:
         """
@@ -122,27 +134,16 @@ class TelegramNotifier:
             try:
                 logger.info(f"Attempting to send message (attempt {attempt + 1}/{max_retries})")
 
-                # Try to get existing event loop
-                try:
-                    loop = asyncio.get_running_loop()
-                    logger.debug("Found running event loop, using run_coroutine_threadsafe")
-                    # We're inside a running loop, use run_coroutine_threadsafe
-                    import concurrent.futures
-                    future = asyncio.run_coroutine_threadsafe(self._send_message_async(message), loop)
-                    future.result(timeout=90)  # This will raise exception if sending fails
-                    logger.info(f"Message sent successfully on attempt {attempt + 1}")
-                    return True
-                except RuntimeError as re:
-                    # No running loop, create a new one
-                    logger.debug(f"No running event loop detected: {re}, creating new one")
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    try:
-                        loop.run_until_complete(self._send_message_async(message))
-                        logger.info(f"Message sent successfully on attempt {attempt + 1}")
-                        return True
-                    finally:
-                        loop.close()
+                # Create or reuse persistent event loop for this instance
+                if self.event_loop is None or self.event_loop.is_closed():
+                    logger.debug("Creating new persistent event loop for notifier")
+                    self.event_loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(self.event_loop)
+
+                # Run the async send operation
+                self.event_loop.run_until_complete(self._send_message_async(message))
+                logger.info(f"Message sent successfully on attempt {attempt + 1}")
+                return True
 
             except Exception as e:
                 error_str = str(e)
@@ -150,6 +151,11 @@ class TelegramNotifier:
                 is_retryable = any(keyword in error_str.lower() for keyword in [
                     'pool timeout', 'event loop is closed', 'connection', 'timeout'
                 ])
+
+                # If event loop error, reset it
+                if 'event loop is closed' in error_str.lower():
+                    logger.debug("Event loop was closed, will create new one on retry")
+                    self.event_loop = None
 
                 if is_retryable and attempt < max_retries - 1:
                     logger.warning(f"Retryable error ({error_str}), retrying in {retry_delay} seconds (attempt {attempt + 1}/{max_retries})")
@@ -231,3 +237,10 @@ class TelegramNotifier:
         except Exception as e:
             logger.error(f"Connection test failed: {e}")
             return False
+
+    def cleanup(self):
+        """Clean up resources (event loop)"""
+        if self.event_loop and not self.event_loop.is_closed():
+            logger.debug("Closing persistent event loop")
+            self.event_loop.close()
+            self.event_loop = None
