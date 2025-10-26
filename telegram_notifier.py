@@ -11,7 +11,6 @@ import logging
 from typing import Optional, Dict
 import asyncio
 from telegram import Bot
-from telegram.error import TelegramError
 from telegram.constants import ParseMode
 
 logger = logging.getLogger(__name__)
@@ -88,23 +87,18 @@ class TelegramNotifier:
 
         Returns:
             True if successful, False otherwise
-        """
-        try:
-            await self.bot.send_message(
-                chat_id=self.chat_id,
-                text=message,
-                parse_mode=ParseMode.HTML,
-                disable_web_page_preview=False
-            )
-            logger.info(f"Message sent to Telegram chat {self.chat_id}")
-            return True
 
-        except TelegramError as e:
-            logger.error(f"Telegram error: {e}")
-            return False
-        except Exception as e:
-            logger.error(f"Error sending Telegram message: {e}")
-            return False
+        Raises:
+            Exception if sending fails (for retry logic)
+        """
+        await self.bot.send_message(
+            chat_id=self.chat_id,
+            text=message,
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=False
+        )
+        logger.info(f"Message sent to Telegram chat {self.chat_id}")
+        return True
 
     def send_message(self, message: str) -> bool:
         """
@@ -135,24 +129,18 @@ class TelegramNotifier:
                     # We're inside a running loop, use run_coroutine_threadsafe
                     import concurrent.futures
                     future = asyncio.run_coroutine_threadsafe(self._send_message_async(message), loop)
-                    result = future.result(timeout=90)  # Increased timeout for pool availability
-                    if result:
-                        logger.info(f"Message sent successfully on attempt {attempt + 1}")
-                        return True
-                    else:
-                        raise Exception("Failed to send message (async returned False)")
+                    future.result(timeout=90)  # This will raise exception if sending fails
+                    logger.info(f"Message sent successfully on attempt {attempt + 1}")
+                    return True
                 except RuntimeError as re:
                     # No running loop, create a new one
                     logger.debug(f"No running event loop detected: {re}, creating new one")
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
                     try:
-                        result = loop.run_until_complete(self._send_message_async(message))
-                        if result:
-                            logger.info(f"Message sent successfully on attempt {attempt + 1}")
-                            return True
-                        else:
-                            raise Exception("Failed to send message (async returned False)")
+                        loop.run_until_complete(self._send_message_async(message))
+                        logger.info(f"Message sent successfully on attempt {attempt + 1}")
+                        return True
                     finally:
                         loop.close()
 
