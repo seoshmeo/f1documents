@@ -90,12 +90,13 @@ class TelegramNotifier:
 
         return "".join(message_parts)
 
-    async def _send_message_async(self, message: str) -> bool:
+    async def _send_message_async(self, message: str, chat_id: str = None) -> bool:
         """
         Send message asynchronously
 
         Args:
             message: Message text to send
+            chat_id: Optional chat ID to send to (uses default if not specified)
 
         Returns:
             True if successful, False otherwise
@@ -103,21 +104,23 @@ class TelegramNotifier:
         Raises:
             Exception if sending fails (for retry logic)
         """
+        target_chat_id = chat_id or self.chat_id
         await self.bot.send_message(
-            chat_id=self.chat_id,
+            chat_id=target_chat_id,
             text=message,
             parse_mode=ParseMode.HTML,
             disable_web_page_preview=False
         )
-        logger.info(f"Message sent to Telegram chat {self.chat_id}")
+        logger.info(f"Message sent to Telegram chat {target_chat_id}")
         return True
 
-    def send_message(self, message: str) -> bool:
+    def send_message(self, message: str, chat_id: str = None) -> bool:
         """
         Send a plain text message to Telegram
 
         Args:
             message: Message text to send
+            chat_id: Optional chat ID to send to (uses default if not specified)
 
         Returns:
             True if successful, False otherwise
@@ -141,7 +144,7 @@ class TelegramNotifier:
                     asyncio.set_event_loop(self.event_loop)
 
                 # Run the async send operation
-                self.event_loop.run_until_complete(self._send_message_async(message))
+                self.event_loop.run_until_complete(self._send_message_async(message, chat_id))
                 logger.info(f"Message sent successfully on attempt {attempt + 1}")
                 return True
 

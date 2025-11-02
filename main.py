@@ -12,7 +12,7 @@ import sys
 import time
 import logging
 from dotenv import load_dotenv
-from database import Database
+from old_database import Database
 from scraper import FIAScraper
 from telegram_notifier import TelegramNotifier
 from pdf_processor import PDFProcessor
