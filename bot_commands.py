@@ -9,7 +9,7 @@ import time
 import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
-from database import Database
+from old_database import Database
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

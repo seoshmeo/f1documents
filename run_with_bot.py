@@ -77,7 +77,7 @@ def run_scraper():
 
 def run_bot():
     """Run Telegram bot"""
-    from database import Database
+    from old_database import Database
     from bot_commands import setup_bot_handlers
 
     logger.info("Starting Telegram bot...")
