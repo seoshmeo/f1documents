@@ -13,7 +13,7 @@ from scrapers.larnaka_scraper import LarnakaScraper
 from database.larnaka_database import LarnakaDatabase
 from formatters.larnaka_formatter import format_larnaka_event_post
 from telegram_notifier import TelegramNotifier
-from claude_summarizer import generate_summary
+from claude_summarizer import ClaudeSummarizer
 from config import Config
 
 # Load environment variables
@@ -49,10 +49,12 @@ def process_new_event(event, db, telegram, admin_chat_id):
 
         # Generate AI summary
         logger.info("Generating AI summary...")
-        summary = generate_summary(
-            event_info,
-            context="Это культурное событие в Ларнаке, Кипр. Создай краткое описание события на русском языке (2-3 предложения)."
-        )
+        summarizer = ClaudeSummarizer()
+        summary = None
+        if summarizer.is_available():
+            summary = summarizer.generate_summary(event_info, "Larnaka Event")
+        else:
+            logger.warning("Claude summarizer not available")
 
         if summary:
             logger.info(f"Summary generated: {summary[:100]}...")
