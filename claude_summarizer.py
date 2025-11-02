@@ -49,7 +49,28 @@ class ClaudeSummarizer:
         Returns:
             Formatted prompt string
         """
-        prompt = f"""Проанализируй этот технический документ FIA Formula 1 и создай краткое саммари на русском языке.
+        # Check if this is a Larnaka event or FIA document
+        is_larnaka_event = "Larnaka Event" in document_name or "Событие:" in document_text
+
+        if is_larnaka_event:
+            # Prompt for Larnaka cultural events
+            prompt = f"""Проанализируй это культурное событие в Ларнаке (Кипр) и создай краткое описание на русском языке.
+
+{document_text}
+
+ВАЖНО:
+- Описание должно быть на РУССКОМ языке (не на греческом или английском)
+- Максимум 3-5 предложений
+- Переведи название события на русский, если оно на другом языке
+- Опиши о чем событие простым и понятным языком
+- Укажи для кого это событие может быть интересно
+- Не используй избыточное форматирование
+- Пиши естественно и дружелюбно
+
+Создай краткое описание этого события на русском языке:"""
+        else:
+            # Prompt for FIA technical documents
+            prompt = f"""Проанализируй этот технический документ FIA Formula 1 и создай краткое саммари на русском языке.
 
 Документ: {document_name}
 
