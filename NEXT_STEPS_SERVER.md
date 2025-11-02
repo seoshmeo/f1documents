@@ -106,13 +106,41 @@ LARNAKA_TELEGRAM_CHAT_ID=-1001234567890
 
 Save and exit (Ctrl+X, Y, Enter)
 
-### Step 6: Restart Larnaka Scraper
+### Step 6: Test Larnaka Notification
+
+Before restarting the scraper, test that notifications work:
+
+```bash
+/opt/f1documents/venv/bin/python test_larnaka_notification.py
+```
+
+This script tests the exact code path that the Larnaka scraper uses:
+- Shows your configuration
+- Formats a test event message
+- Attempts to send to admin chat (if configured)
+- Attempts to send to Larnaka channel
+
+**Expected output:**
+```
+✅ SUCCESS: Message sent to Larnaka channel
+Check your Telegram group to verify the message arrived!
+```
+
+**If it fails:**
+- Check the error message
+- Verify bot is in group as administrator
+- Verify chat ID is correct (with minus sign!)
+- Check logs for more details
+
+### Step 7: Restart Larnaka Scraper
+
+Once the test is successful:
 
 ```bash
 sudo systemctl restart larnaka-scraper
 ```
 
-### Step 7: Monitor Logs
+### Step 8: Monitor Logs
 
 Watch the logs in real-time:
 
@@ -130,9 +158,9 @@ Look for:
 - ✅ "Successfully sent event to Telegram"
 - ❌ Any error messages
 
-### Step 8: Test with Manual Event
+### Step 9: Test with Manual Event (Optional)
 
-If you want to test immediately, delete one event from the database and let the scraper rediscover it:
+If you want to test the scraper end-to-end, delete one event from the database and let the scraper rediscover it:
 
 ```bash
 # Connect to database
