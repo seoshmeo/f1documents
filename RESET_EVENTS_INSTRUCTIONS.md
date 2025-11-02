@@ -2,203 +2,126 @@
 
 Эта инструкция объясняет как удалить события от 3 ноября и позже, чтобы скрапер заново их обнаружил и отправил с правильными русскими саммари.
 
-## Быстрый способ (рекомендуется)
+## Команды для выполнения на сервере
+
+### Шаг 1: Подключитесь к серверу
 
 ```bash
-# На сервере
-cd /opt/f1documents
-
-# Сделайте скрипт исполняемым
-chmod +x reset_larnaka_events.sh
-
-# Запустите скрипт
-./reset_larnaka_events.sh
+ssh root@161.35.157.202
 ```
 
-Скрипт покажет:
-1. Какие события будут удалены
-2. Сколько событий будет удалено
-3. Попросит подтверждение
-4. Удалит события
-5. Покажет статистику оставшихся событий
-
-## Ручной способ (через SQL)
-
-### Вариант 1: Предварительный просмотр
-
-```bash
-docker exec fia_postgres psql -U postgres -d fia_documents -c "
-SELECT
-    id,
-    title,
-    date,
-    created_at
-FROM larnaka_events
-WHERE date >= '2024-11-03'
-ORDER BY date DESC;
-"
-```
-
-### Вариант 2: Удаление всех событий с 3 ноября
-
-```bash
-docker exec fia_postgres psql -U postgres -d fia_documents -c "
-DELETE FROM larnaka_events WHERE date >= '2024-11-03';
-"
-```
-
-### Вариант 3: Удаление конкретных событий по ID
-
-```bash
-# Если хотите удалить конкретные события
-docker exec fia_postgres psql -U postgres -d fia_documents -c "
-DELETE FROM larnaka_events WHERE id IN (21, 22, 23);
-"
-```
-
-## После удаления
-
-### 1. Убедитесь что .env настроен правильно
-
-```bash
-nano /opt/f1documents/.env
-```
-
-Проверьте:
-```bash
-LARNAKA_TELEGRAM_CHAT_ID=-1001974716718
-ANTHROPIC_API_KEY=sk-ant-api03-... # Ваш ключ
-```
-
-### 2. Получите последние изменения из GitHub
+### Шаг 2: Перейдите в директорию проекта и получите изменения
 
 ```bash
 cd /opt/f1documents
 git pull origin main
 ```
 
-### 3. Перезапустите скрапер
+### Шаг 3: Проверьте .env файл
+
+```bash
+nano .env
+```
+
+Убедитесь что есть:
+```
+LARNAKA_TELEGRAM_CHAT_ID=-1001974716718
+ANTHROPIC_API_KEY=sk-ant-api03-ваш_ключ
+```
+
+Сохраните: `Ctrl+X`, `Y`, `Enter`
+
+### Шаг 4: Посмотрите какие события будут удалены
+
+```bash
+docker exec fia_postgres psql -U postgres -d fia_documents -c "SELECT id, title, date FROM larnaka_events WHERE date >= '2024-11-03' ORDER BY date DESC;"
+```
+
+### Шаг 5: Удалите события от 3 ноября
+
+```bash
+docker exec fia_postgres psql -U postgres -d fia_documents -c "DELETE FROM larnaka_events WHERE date >= '2024-11-03';"
+```
+
+### Шаг 6: Проверьте что события удалены
+
+```bash
+docker exec fia_postgres psql -U postgres -d fia_documents -c "SELECT COUNT(*) FROM larnaka_events WHERE date >= '2024-11-03';"
+```
+
+Должно показать `0`
+
+### Шаг 7: Перезапустите scraper
 
 ```bash
 sudo systemctl restart larnaka-scraper
 ```
 
-### 4. Следите за логами
+### Шаг 8: Следите за логами
 
 ```bash
 sudo journalctl -u larnaka-scraper -f
 ```
 
-Вы должны увидеть:
+Должны увидеть:
+- `Found X events` - найдены события
+- `New event found` - новое событие
+- `Generating AI summary...` - генерация саммари
+- `Summary generated` - саммари на русском
+- `Successfully sent event to Telegram` - отправлено!
+
+## Что должно получиться
+
+В Telegram группе появятся сообщения на русском:
+
 ```
-INFO - Found 20 events
-INFO - New event found: [название события]
-INFO - Generating AI summary...
-INFO - Summary generated: [русское описание]...
-INFO - Successfully sent event to Telegram: [название]
+🎭 Культурное событие в Ларнаке
+
+📌 [Название на русском]
+
+📅 Дата: 15 декабря 2024
+🕐 Время: 19:00
+📍 Место: Муниципальный театр
+
+📝 Описание:
+[Краткое описание на русском языке, переведенное Claude AI]
+
+🔗 Подробнее
 ```
 
-## Проверка в Telegram
+## Проблемы и решения
 
-В группе Larnaka Events должны появиться сообщения с:
-- ✅ Названием на русском (если было на греческом)
-- ✅ Описанием на русском
-- ✅ Правильным форматированием
+### Сообщения на греческом вместо русского
 
-## Troubleshooting
-
-### События не появляются
-
-**Проблема:** Скрапер не находит новые события
-
-**Решение:**
+Проверьте логи:
 ```bash
-# Проверьте что события действительно удалены
-docker exec fia_postgres psql -U postgres -d fia_documents -c "
-SELECT COUNT(*) FROM larnaka_events WHERE date >= '2024-11-03';
-"
-
-# Должно быть 0
-```
-
-### Сообщения все еще на греческом
-
-**Проблема:** ANTHROPIC_API_KEY не настроен или неверный
-
-**Решение:**
-```bash
-# Проверьте .env
-cat /opt/f1documents/.env | grep ANTHROPIC
-
-# Проверьте логи
 sudo journalctl -u larnaka-scraper -n 50 | grep -i "anthropic\|summary"
 ```
 
-Должны видеть:
+Должно быть:
 ```
 INFO - Anthropic API key found, summary generation enabled
-INFO - Generating summary for: [название]
 INFO - Summary generated successfully
 ```
 
-Если видите:
-```
-WARNING - ANTHROPIC_API_KEY not found in environment variables
-WARNING - Summary generation will be disabled
-```
+Если видите `WARNING - ANTHROPIC_API_KEY not found` - проверьте .env
 
-Значит ключ не настроен или неверный.
+### События не отправляются
 
-### Scraper не запускается
-
-**Проблема:** Ошибки при запуске
-
-**Решение:**
+Проверьте статус:
 ```bash
-# Проверьте статус
 sudo systemctl status larnaka-scraper
-
-# Проверьте подробные логи
-sudo journalctl -u larnaka-scraper -n 100 --no-pager
+sudo journalctl -u larnaka-scraper -n 100
 ```
 
-## Полезные команды
+## Дополнительные команды
 
-### Посмотреть все события в базе
-
+Посмотреть все события:
 ```bash
-docker exec fia_postgres psql -U postgres -d fia_documents -c "
-SELECT id, title, date FROM larnaka_events ORDER BY date DESC LIMIT 10;
-"
+docker exec fia_postgres psql -U postgres -d fia_documents -c "SELECT id, title, date FROM larnaka_events ORDER BY date DESC LIMIT 10;"
 ```
 
-### Посмотреть статистику событий
-
+Посмотреть статистику:
 ```bash
-docker exec fia_postgres psql -U postgres -d fia_documents -c "
-SELECT
-    COUNT(*) as total_events,
-    MIN(date) as earliest_date,
-    MAX(date) as latest_date,
-    COUNT(CASE WHEN summary IS NOT NULL AND summary != '' THEN 1 END) as events_with_summary
-FROM larnaka_events;
-"
+docker exec fia_postgres psql -U postgres -d fia_documents -c "SELECT COUNT(*) as total, MIN(date) as earliest, MAX(date) as latest FROM larnaka_events;"
 ```
-
-### Найти события без саммари
-
-```bash
-docker exec fia_postgres psql -U postgres -d fia_documents -c "
-SELECT id, title, date
-FROM larnaka_events
-WHERE summary IS NULL OR summary = ''
-ORDER BY date DESC;
-"
-```
-
-## Связанные файлы
-
-- [reset_larnaka_events.sh](reset_larnaka_events.sh) - Скрипт для удаления событий
-- [delete_november_events.sql](delete_november_events.sql) - SQL запросы
-- [LARNAKA_FIX_SUMMARY.md](LARNAKA_FIX_SUMMARY.md) - Общая информация о фиксе
-- [NEXT_STEPS_SERVER.md](NEXT_STEPS_SERVER.md) - Подробная инструкция по настройке
