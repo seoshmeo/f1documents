@@ -18,13 +18,23 @@ class Config:
     DB_USER = os.getenv('DB_USER', 'postgres')
     DB_PASSWORD = os.getenv('DB_PASSWORD', '')
 
-    # Scraper settings
+    # FIA Scraper settings
     FIA_URL = os.getenv(
         'FIA_URL',
         'https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2025-2071'
     )
+    FIA_CHECK_INTERVAL = int(os.getenv('FIA_CHECK_INTERVAL', 3600))  # 1 hour
+    FIA_ENABLED = os.getenv('FIA_ENABLED', 'true').lower() == 'true'
 
-    # Check interval in seconds (default: 1 hour)
+    # Larnaka Scraper settings
+    LARNAKA_URL = os.getenv(
+        'LARNAKA_URL',
+        'https://www.larnaka.org.cy/en/information/cultural-activities-initiatives/events-calendar/'
+    )
+    LARNAKA_CHECK_INTERVAL = int(os.getenv('LARNAKA_CHECK_INTERVAL', 7200))  # 2 hours
+    LARNAKA_ENABLED = os.getenv('LARNAKA_ENABLED', 'true').lower() == 'true'
+
+    # Legacy (for backward compatibility)
     CHECK_INTERVAL = int(os.getenv('CHECK_INTERVAL', 3600))
 
     # Request timeout in seconds
@@ -38,7 +48,7 @@ class Config:
 
     # Logging settings
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
-    LOG_FILE = os.getenv('LOG_FILE', 'fia_scraper.log')
+    LOG_FILE = os.getenv('LOG_FILE', 'scraper.log')
 
     @classmethod
     def get_database_url(cls):
